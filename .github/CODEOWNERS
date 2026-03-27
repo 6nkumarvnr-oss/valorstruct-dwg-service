@@ -1,0 +1,6 @@
+# Default code owners
+* @your-github-org/maintainers
+
+# Engine-specific owners
+/tet_engine/ @your-github-org/ai-platform
+/docs/ @your-github-org/tech-writers
