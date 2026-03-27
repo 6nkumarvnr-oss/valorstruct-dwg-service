@@ -139,3 +139,38 @@ class AuthTokenResponse(BaseModel):
 
 class AuthRefreshRequest(BaseModel):
     refresh_token: str
+
+
+class ReviewStatus(str, Enum):
+    draft = "draft"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class ReviewActionRequest(BaseModel):
+    reviewer_email: str
+    comments: str = ""
+
+
+class QuestionEditRequest(BaseModel):
+    question_text: str
+    options: List[QuestionOption]
+    correct_answer: str
+    explanation: str
+
+
+class ReviewQuestionRecord(BaseModel):
+    id: int
+    exam_code: str
+    paper_name: str
+    subject_name: str
+    topic_name: str
+    question_text: str
+    options: List[dict[str, Any]]
+    correct_option: str
+    explanation: str
+    difficulty: str
+    status: ReviewStatus
+    reviewer_email: str | None = None
+    review_comments: str | None = None
+    reviewed_at: str | None = None
