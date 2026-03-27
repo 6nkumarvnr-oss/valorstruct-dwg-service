@@ -18,8 +18,12 @@ from .models import (
     GroundedGenerateRequest,
     PaperCreate,
     Question,
+    QuestionEditRequest,
     QuestionOption,
+    ReviewActionRequest,
     ReviewDecision,
+    ReviewQuestionRecord,
+    ReviewStatus,
     PublishReportRequest,
     SourceUpload,
     SubjectCreate,
@@ -294,11 +298,178 @@ def create_admin_user(payload: AdminUserCreate) -> dict:
         "password_hash": hash_password(payload.password),
     }
     storage.admin_users[user_id] = user
-    return user
+    return _sanitize_admin_user(user)
 
 
 def list_admin_users() -> list[dict]:
-    return list(storage.admin_users.values())
+    return [_sanitize_admin_user(user) for user in storage.admin_users.values()]
+
+
+def _sanitize_admin_user(user: dict) -> dict:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+    }
+
+
+def authenticate_admin_access_token(token: str) -> dict:
+    token_data = decode_token(token)
+    if token_data.get("type") != "access":
+        raise ValueError("invalid token type")
+
+    user_id = token_data.get("sub", "")
+    user = storage.admin_users.get(user_id)
+    if not user:
+        raise ValueError("user not found")
+
+    return _sanitize_admin_user(user)
+
+
+def require_user_role(user: dict, allowed_roles: set[str]) -> None:
+    if user.get("role") not in allowed_roles:
+        raise ValueError("insufficient role permissions")
+
+
+def list_review_questions(
+    *,
+    exam_code: str,
+    paper_name: str | None = None,
+    subject_name: str | None = None,
+    topic_name: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    with SessionLocal() as session:
+        query = session.query(GeneratedQuestion).filter(GeneratedQuestion.exam_code == exam_code.upper())
+        if paper_name:
+            query = query.filter(GeneratedQuestion.paper_name == paper_name)
+        if subject_name:
+            query = query.filter(GeneratedQuestion.subject_name == subject_name)
+        if topic_name:
+            query = query.filter(GeneratedQuestion.topic_name == topic_name)
+        if status:
+            query = query.filter(GeneratedQuestion.status == status)
+
+        rows = query.order_by(GeneratedQuestion.id.desc()).offset(offset).limit(limit).all()
+        return [_serialize_review_question(row) for row in rows]
+
+
+def approve_question(question_id: int, payload: ReviewActionRequest) -> dict:
+    return _review_question(
+        question_id=question_id,
+        reviewer_email=payload.reviewer_email,
+        comments=payload.comments,
+        status=ReviewStatus.approved.value,
+    )
+
+
+def reject_question(question_id: int, payload: ReviewActionRequest) -> dict:
+    return _review_question(
+        question_id=question_id,
+        reviewer_email=payload.reviewer_email,
+        comments=payload.comments,
+        status=ReviewStatus.rejected.value,
+        validate_before_review=False,
+    )
+
+
+def edit_question(question_id: int, payload: QuestionEditRequest) -> dict:
+    with SessionLocal() as session:
+        try:
+            row = session.query(GeneratedQuestion).filter(GeneratedQuestion.id == question_id).one_or_none()
+            if not row:
+                raise ValueError("question not found")
+
+            row.question_text = payload.question_text
+            row.options_json = json.dumps([item.model_dump() for item in payload.options], ensure_ascii=False)
+            row.correct_option = payload.correct_answer
+            row.explanation = payload.explanation
+            _validate_generated_question_for_approval(row)
+            row.status = ReviewStatus.draft.value
+            row.reviewer_email = None
+            row.review_comments = None
+            row.reviewed_at = None
+            session.commit()
+            session.refresh(row)
+            return _serialize_review_question(row)
+        except Exception:
+            session.rollback()
+            raise
+
+
+def _review_question(
+    *,
+    question_id: int,
+    reviewer_email: str,
+    comments: str,
+    status: str,
+    validate_before_review: bool = True,
+) -> dict:
+    with SessionLocal() as session:
+        try:
+            row = session.query(GeneratedQuestion).filter(GeneratedQuestion.id == question_id).one_or_none()
+            if not row:
+                raise ValueError("question not found")
+
+            if validate_before_review:
+                _validate_generated_question_for_approval(row)
+
+            row.status = status
+            row.reviewer_email = reviewer_email
+            row.review_comments = comments
+            row.reviewed_at = datetime.utcnow()
+            session.commit()
+            session.refresh(row)
+            return _serialize_review_question(row)
+        except Exception:
+            session.rollback()
+            raise
+
+
+def _validate_generated_question_for_approval(question: GeneratedQuestion) -> None:
+    valid_exam_codes = {item["code"] for item in exam_catalog_as_dict()}
+    if question.exam_code not in valid_exam_codes:
+        raise ValueError("question exam_code is invalid")
+
+    options = _load_question_options(question)
+    matches = [item for item in options if item.get("label") == question.correct_option]
+    if len(matches) != 1:
+        raise ValueError("question must have exactly one correct answer")
+
+    if not question.explanation or not question.explanation.strip():
+        raise ValueError("question explanation must not be empty")
+
+
+def _load_question_options(question: GeneratedQuestion) -> list[dict]:
+    try:
+        options = json.loads(question.options_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid question options format") from exc
+    if not isinstance(options, list):
+        raise ValueError("question options must be a list")
+    return options
+
+
+def _serialize_review_question(row: GeneratedQuestion) -> dict:
+    return ReviewQuestionRecord(
+        id=row.id,
+        exam_code=row.exam_code,
+        paper_name=row.paper_name,
+        subject_name=row.subject_name,
+        topic_name=row.topic_name,
+        question_text=row.question_text,
+        options=_load_question_options(row),
+        correct_option=row.correct_option,
+        explanation=row.explanation,
+        difficulty=row.difficulty,
+        status=ReviewStatus(row.status.value if hasattr(row.status, "value") else row.status),
+        reviewer_email=row.reviewer_email,
+        review_comments=row.review_comments,
+        reviewed_at=row.reviewed_at.isoformat() if row.reviewed_at else None,
+    ).model_dump()
 
 
 def bootstrap_exam_hierarchy() -> list[dict]:

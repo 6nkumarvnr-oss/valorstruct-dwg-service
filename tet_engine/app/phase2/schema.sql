@@ -38,8 +38,13 @@ CREATE TABLE IF NOT EXISTS generated_questions (
   explanation TEXT NOT NULL,
   difficulty VARCHAR(20) NOT NULL,
   source_chunk_ids TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'draft',
+  reviewer_email VARCHAR(255),
+  review_comments TEXT,
+  reviewed_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_generated_questions_topic ON generated_questions(topic_name);
 CREATE INDEX IF NOT EXISTS idx_generated_questions_difficulty ON generated_questions(difficulty);
+CREATE INDEX IF NOT EXISTS idx_generated_questions_status ON generated_questions(status);
