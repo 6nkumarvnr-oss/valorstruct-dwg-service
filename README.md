@@ -192,6 +192,7 @@ This generates a text report under `tet_engine_data/reports/`.
 - `docs/missing_requirements_and_improvements.md` (gap analysis + prioritized improvements)
 - `docs/similar_engine_evaluation_framework.md` (benchmark framework to compare with similar engines)
 - `docs/github_and_platform_recommendations.md` (GitHub checks + live deployment platform plan)
+- `docs/beginner_step_by_step_manual.md` (beginner-friendly complete procedure)
 
 ## How to operate the Question Bank Engine (daily runbook)
 
