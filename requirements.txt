@@ -1,4 +1,10 @@
 fastapi
 uvicorn
-ezdxf
 python-multipart
+sqlalchemy
+psycopg[binary]
+pypdf
+openai
+alembic
+pytest
+httpx
