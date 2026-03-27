@@ -3,8 +3,9 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from ..models import ReviewStatus
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/tet_engine")
 
@@ -62,6 +63,14 @@ class GeneratedQuestion(Base):
     explanation: Mapped[str] = mapped_column(Text)
     difficulty: Mapped[str] = mapped_column(String(20), index=True)
     source_chunk_ids: Mapped[str] = mapped_column(Text)
+    status: Mapped[ReviewStatus] = mapped_column(
+        SAEnum(ReviewStatus, name="question_status"),
+        default=ReviewStatus.draft,
+        index=True,
+    )
+    reviewer_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    review_comments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
