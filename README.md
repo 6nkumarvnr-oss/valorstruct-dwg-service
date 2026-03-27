@@ -195,6 +195,7 @@ This generates a text report under `tet_engine_data/reports/`.
 - `docs/beginner_step_by_step_manual.md` (beginner-friendly complete procedure)
 - `docs/beginner_manual_part2_api_examples.md` (copy/paste API calls with expected output)
 - `docs/beginner_manual_part3_one_day_demo_plan.md` (one-day real test-run checklist for first demo)
+- `docs/offline_local_setup_no_github.md` (local/offline setup without GitHub)
 
 ## How to operate the Question Bank Engine (daily runbook)
 
