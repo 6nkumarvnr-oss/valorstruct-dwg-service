@@ -1,0 +1,36 @@
+[
+  {
+    "engine": "your_tet_engine_v2",
+    "metrics": {
+      "syllabus_alignment": 4.6,
+      "answer_key_correctness": 4.5,
+      "explanation_quality": 4.4,
+      "duplicate_control": 4.1,
+      "difficulty_calibration": 4.0,
+      "source_grounding": 4.3,
+      "review_workflow": 4.6,
+      "publish_audit_controls": 4.7,
+      "api_readiness": 4.2,
+      "cost_efficiency": 4.0,
+      "latency": 3.7,
+      "security_compliance": 4.2
+    }
+  },
+  {
+    "engine": "baseline_engine",
+    "metrics": {
+      "syllabus_alignment": 3.8,
+      "answer_key_correctness": 3.7,
+      "explanation_quality": 3.5,
+      "duplicate_control": 3.4,
+      "difficulty_calibration": 3.6,
+      "source_grounding": 3.2,
+      "review_workflow": 3.1,
+      "publish_audit_controls": 2.9,
+      "api_readiness": 3.9,
+      "cost_efficiency": 4.3,
+      "latency": 4.1,
+      "security_compliance": 3.5
+    }
+  }
+]
