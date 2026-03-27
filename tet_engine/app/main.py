@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 
 from .models import (
     AdminUserCreate,
@@ -17,8 +17,12 @@ from .models import (
     PaperCreate,
     PublishReportRequest,
     PublishReportResponse,
+    QuestionEditRequest,
     Question,
+    ReviewActionRequest,
+    ReviewQuestionRecord,
     ReviewDecision,
+    ReviewStatus,
     SourceUpload,
     SubjectCreate,
     TopicCreate,
@@ -26,6 +30,7 @@ from .models import (
 )
 from .phase2.db import init_db
 from .services import (
+    authenticate_admin_access_token,
     bootstrap_exam_hierarchy,
     delete_source,
     create_admin_user,
@@ -38,18 +43,46 @@ from .services import (
     generate_questions,
     ingest_pdf_source,
     ingest_source,
+    edit_question,
     list_admin_users,
+    list_review_questions,
     list_sources,
     list_exam_catalog,
     list_questions,
     publish_questions_with_report,
     login_admin,
     refresh_access_token,
+    reject_question,
     review_questions,
+    require_user_role,
+    approve_question,
     validate_questions,
 )
 
 app = FastAPI(title="TET Agentic Question Engine", version="0.2.0")
+
+
+def require_admin_auth(authorization: str | None = Header(default=None)) -> dict:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="missing authorization header")
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="invalid authorization header")
+
+    try:
+        return authenticate_admin_access_token(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="invalid or expired access token")
+
+
+def require_reviewer_auth(authorization: str | None = Header(default=None)) -> dict:
+    user = require_admin_auth(authorization)
+    try:
+        require_user_role(user, {"super_admin", "content_admin", "reviewer"})
+    except Exception:
+        raise HTTPException(status_code=403, detail="insufficient role permissions")
+    return user
 
 
 @app.on_event("startup")
@@ -102,12 +135,12 @@ def list_exam_catalog_endpoint() -> list[dict]:
 
 
 @app.post("/v2/admin/users")
-def create_admin_user_endpoint(payload: AdminUserCreate) -> dict:
+def create_admin_user_endpoint(payload: AdminUserCreate, _: dict = Depends(require_admin_auth)) -> dict:
     return create_admin_user(payload)
 
 
 @app.get("/v2/admin/users")
-def list_admin_users_endpoint() -> list[dict]:
+def list_admin_users_endpoint(_: dict = Depends(require_admin_auth)) -> list[dict]:
     return list_admin_users()
 
 
@@ -170,6 +203,64 @@ def generate_questions_endpoint(payload: GenerateQuestionsRequest) -> List[Quest
 def generate_grounded_questions_endpoint(payload: GroundedGenerateRequest) -> GroundedQuestionResponse:
     result = generate_grounded_questions(payload)
     return GroundedQuestionResponse(**result)
+
+
+@app.get("/v2/questions/review", response_model=List[ReviewQuestionRecord])
+def list_review_questions_endpoint(
+    exam_code: str,
+    paper_name: Optional[str] = None,
+    subject_name: Optional[str] = None,
+    topic_name: Optional[str] = None,
+    status: Optional[ReviewStatus] = None,
+    _: dict = Depends(require_reviewer_auth),
+) -> List[ReviewQuestionRecord]:
+    result = list_review_questions(
+        exam_code=exam_code,
+        paper_name=paper_name,
+        subject_name=subject_name,
+        topic_name=topic_name,
+        status=status.value if status else None,
+    )
+    return [ReviewQuestionRecord(**item) for item in result]
+
+
+@app.post("/v2/questions/{question_id}/approve", response_model=ReviewQuestionRecord)
+def approve_question_endpoint(
+    question_id: int,
+    payload: ReviewActionRequest,
+    _: dict = Depends(require_reviewer_auth),
+) -> ReviewQuestionRecord:
+    try:
+        result = approve_question(question_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ReviewQuestionRecord(**result)
+
+
+@app.post("/v2/questions/{question_id}/reject", response_model=ReviewQuestionRecord)
+def reject_question_endpoint(
+    question_id: int,
+    payload: ReviewActionRequest,
+    _: dict = Depends(require_reviewer_auth),
+) -> ReviewQuestionRecord:
+    try:
+        result = reject_question(question_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ReviewQuestionRecord(**result)
+
+
+@app.put("/v2/questions/{question_id}", response_model=ReviewQuestionRecord)
+def edit_question_endpoint(
+    question_id: int,
+    payload: QuestionEditRequest,
+    _: dict = Depends(require_reviewer_auth),
+) -> ReviewQuestionRecord:
+    try:
+        result = edit_question(question_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ReviewQuestionRecord(**result)
 
 
 
