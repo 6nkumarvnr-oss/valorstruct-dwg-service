@@ -294,11 +294,33 @@ def create_admin_user(payload: AdminUserCreate) -> dict:
         "password_hash": hash_password(payload.password),
     }
     storage.admin_users[user_id] = user
-    return user
+    return _sanitize_admin_user(user)
 
 
 def list_admin_users() -> list[dict]:
-    return list(storage.admin_users.values())
+    return [_sanitize_admin_user(user) for user in storage.admin_users.values()]
+
+
+def _sanitize_admin_user(user: dict) -> dict:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+    }
+
+
+def authenticate_admin_access_token(token: str) -> dict:
+    token_data = decode_token(token)
+    if token_data.get("type") != "access":
+        raise ValueError("invalid token type")
+
+    user_id = token_data.get("sub", "")
+    user = storage.admin_users.get(user_id)
+    if not user:
+        raise ValueError("user not found")
+
+    return _sanitize_admin_user(user)
 
 
 def bootstrap_exam_hierarchy() -> list[dict]:
