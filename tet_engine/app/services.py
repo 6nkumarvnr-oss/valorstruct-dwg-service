@@ -294,11 +294,20 @@ def create_admin_user(payload: AdminUserCreate) -> dict:
         "password_hash": hash_password(payload.password),
     }
     storage.admin_users[user_id] = user
-    return user
+    return _public_admin_user(user)
 
 
 def list_admin_users() -> list[dict]:
-    return list(storage.admin_users.values())
+    return [_public_admin_user(user) for user in storage.admin_users.values()]
+
+
+def _public_admin_user(user: dict) -> dict:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+    }
 
 
 def bootstrap_exam_hierarchy() -> list[dict]:
