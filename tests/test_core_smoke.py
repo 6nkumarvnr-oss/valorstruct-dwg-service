@@ -32,3 +32,22 @@ def test_jwt_create_and_decode():
 def test_admin_user_create_requires_min_password():
     with pytest.raises(Exception):
         AdminUserCreate(email="x@y.com", name="x", role=AdminRole.super_admin, password="short")
+
+
+def test_admin_user_responses_exclude_password_hash():
+    pytest.importorskip("sqlalchemy")
+    from tet_engine.app.services import create_admin_user, list_admin_users, storage
+
+    storage.admin_users.clear()
+    payload = AdminUserCreate(
+        email="admin@example.com",
+        name="Admin",
+        role=AdminRole.super_admin,
+        password="strongpass123",
+    )
+    created = create_admin_user(payload)
+    listed = list_admin_users()
+
+    assert "password_hash" not in created
+    assert "password_hash" not in listed[0]
+    assert "password_hash" in next(iter(storage.admin_users.values()))
